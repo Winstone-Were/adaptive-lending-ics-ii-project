@@ -1,22 +1,54 @@
 'use client';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/Button';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/utils';
-import { CreditCard, Clock, CheckCircle, XCircle, TrendingUp, DollarSign } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, XCircle, TrendingUp, DollarSign, X } from 'lucide-react';
 import { useState } from 'react';
 
 export default function MyLoans() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [selectedLoan, setSelectedLoan] = useState<any>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('bank_transfer');
+  const queryClient = useQueryClient();
 
   const { data: loans, isLoading } = useQuery({
     queryKey: ['customer-loans'],
     queryFn: () => apiRequest('/customers/loans'),
   });
 
+  const repaymentMutation = useMutation({
+    mutationFn: async ({ loanId, amount, paymentMethod }: { loanId: string; amount: number; paymentMethod: string }) => {
+      return apiRequest(`/customers/loans/${loanId}/repay`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amount,
+          payment_method: paymentMethod
+        })
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['customer-loans'] });
+      setSelectedLoan(null);
+      setPaymentAmount('');
+    }
+  });
+
   const filteredLoans = loans?.loans?.filter((loan: any) => 
     selectedStatus === 'all' || loan.status === selectedStatus
   );
+
+  const handlePaymentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLoan || !paymentAmount) return;
+
+    repaymentMutation.mutate({
+      loanId: selectedLoan.loan_id,
+      amount: parseFloat(paymentAmount),
+      paymentMethod
+    });
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -153,7 +185,10 @@ export default function MyLoans() {
                 </div>
 
                 {(loan.status === 'active' || loan.status === 'approved') && (
-                  <Button className="bg-[#EEC643] hover:bg-[#EEC643]/90 text-[#141414]">
+                  <Button 
+                    onClick={() => setSelectedLoan(loan)}
+                    className="bg-[#EEC643] hover:bg-[#EEC643]/90 text-[#141414]"
+                  >
                     <DollarSign className="w-4 h-4 mr-2" />
                     Make Payment
                   </Button>
@@ -191,6 +226,93 @@ export default function MyLoans() {
           </GlassCard>
         )}
       </div>
+
+      {/* Payment Dialog */}
+      {selectedLoan && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-[#141414]">Make Payment</h2>
+              <button 
+                onClick={() => setSelectedLoan(null)}
+                className="text-[#141414]/70 hover:text-[#141414]"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handlePaymentSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#141414] mb-2">
+                  Loan Amount
+                </label>
+                <p className="text-lg font-semibold text-[#141414]">
+                  Ksh {selectedLoan.application_data.loan_amount.toLocaleString()}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-[#141414] mb-2">
+                  Amount Remaining
+                </label>
+                <p className="text-lg font-semibold text-[#141414]">
+                  Ksh {selectedLoan.amount_remaining?.toLocaleString() || selectedLoan.application_data.loan_amount.toLocaleString()}
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="amount" className="block text-sm font-medium text-[#141414] mb-2">
+                  Payment Amount
+                </label>
+                <input
+                  type="number"
+                  id="amount"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-[#141414]/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EEC643]"
+                  placeholder="Enter payment amount"
+                  required
+                />
+              </div>
+
+              <div>
+                <label htmlFor="paymentMethod" className="block text-sm font-medium text-[#141414] mb-2">
+                  Payment Method
+                </label>
+                <select
+                  id="paymentMethod"
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className="w-full px-3 py-2 border border-[#141414]/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#EEC643]"
+                >
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="mobile_money">Mobile Money</option>
+                  <option value="credit_card">Credit Card</option>
+                  <option value="debit_card">Debit Card</option>
+                </select>
+              </div>
+
+              <div className="flex space-x-3 pt-4">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSelectedLoan(null)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="flex-1 bg-[#EEC643] hover:bg-[#EEC643]/90 text-[#141414]"
+                  disabled={repaymentMutation.isPending || !paymentAmount}
+                >
+                  {repaymentMutation.isPending ? 'Processing...' : 'Make Payment'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

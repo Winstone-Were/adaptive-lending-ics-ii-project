@@ -1,17 +1,20 @@
-'use client';
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  User, 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut 
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase/config';
-import { apiRequest } from '@/lib/utils';
+"use client";
+import React, { createContext, useContext, useEffect, useState } from "react";
+import {
+  User,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  signInWithPopup,
+  GoogleAuthProvider,
+} from "firebase/auth";
+import { auth } from "@/lib/firebase/config";
+import { apiRequest } from "@/lib/utils";
+import { useRouter } from "next/navigation";
 
 interface UserProfile {
-  role: 'customer' | 'bank' | 'admin';
+  role: "customer" | "bank" | "admin";
   name: string;
   email: string;
   bank_name?: string;
@@ -27,22 +30,34 @@ interface AuthContextType {
   register: (email: string, password: string, userData: any) => Promise<void>;
   logout: () => Promise<void>;
   refreshUserProfile: () => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Create Google Auth Provider instance
+const googleProvider = new GoogleAuthProvider();
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
+  // Updated fetchUserProfile to include the token
   const fetchUserProfile = async (user: User) => {
     try {
-      const profile = await apiRequest('/auth/me');
+      const token = await user.getIdToken();
+      const profile = await apiRequest("/auth/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       setUserProfile(profile);
     } catch (error) {
-      console.error('Failed to fetch user profile:', error);
+      console.error("Failed to fetch user profile:", error);
       setUserProfile(null);
+      throw error; // Re-throw to handle in loginWithGoogle
     }
   };
 
@@ -62,35 +77,71 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
     // Fetch user profile after successful login
     await fetchUserProfile(userCredential.user);
   };
 
+  const loginWithGoogle = async () => {
+    try {
+      setLoading(true);
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      try {
+        // Try to fetch user profile first
+        await fetchUserProfile(user);
+        // If successful, user exists - redirect to dashboard
+        router.push("/dashboard");
+      } catch (error) {
+        // If fetching profile fails, user doesn't exist in backend
+        console.log(
+          "User profile not found, redirecting to profile completion..."
+        );
+        // Redirect to profile completion page instead of auto-registering
+        router.push("/google-register");
+      }
+    } catch (error) {
+      console.error("Google sign-in failed:", error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const register = async (email: string, password: string, userData: any) => {
     // 1. Create user in Firebase Auth
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    
-    // 2. Wait a moment for the user to be available
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    // 3. Register user in backend
-    const backendData: any = {
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password
+    );
+
+    // 2. Wait for the user to be available
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    // 3. Register user in backend - simplified since role is always customer
+    const backendData = {
       name: userData.name,
       email: userData.email,
-      role: userData.role,
+      role: "customer", // Explicitly set to customer
+      income: userData.income ? parseFloat(userData.income) : 0,
+      date_of_birth: userData.date_of_birth,
+      employment_start_date: userData.employment_start_date,
     };
 
-    if (userData.role === 'customer') {
-      backendData.income = parseFloat(userData.income);
-      backendData.age = parseInt(userData.age);
-      backendData.months_employed = parseInt(userData.monthsEmployed);
-    } else if (userData.role === 'bank') {
-      backendData.bank_name = userData.bankName;
-    }
+    const token = await userCredential.user.getIdToken();
 
-    await apiRequest('/auth/register', {
-      method: 'POST',
+    await apiRequest("/auth/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify(backendData),
     });
 
@@ -110,15 +161,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      userProfile, 
-      loading, 
-      login, 
-      register, 
-      logout,
-      refreshUserProfile 
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        userProfile,
+        loading,
+        login,
+        register,
+        logout,
+        refreshUserProfile,
+        loginWithGoogle,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -127,7 +181,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 }

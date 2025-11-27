@@ -2,7 +2,7 @@ from datetime import datetime
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routes import customers, banks, admin, auth
+from app.routes import customers, banks, admin, auth, loan_packages
 from app.services.system_monitoring import SystemMonitoringService
 import asyncio
 from contextlib import asynccontextmanager
@@ -49,6 +49,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(customers.router, prefix="/api/v1/customers", tags=["Customers"])
 app.include_router(banks.router, prefix="/api/v1/banks", tags=["Banks"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(loan_packages.router, prefix="/api/v1/banks", tags=["Loan Packages"])
 
 @app.get("/")
 async def root():

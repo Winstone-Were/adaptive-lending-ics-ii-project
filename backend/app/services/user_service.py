@@ -1,9 +1,21 @@
 from app.firebase_admin import users_ref, db
 from app.models.user_models import UserCreate, UserUpdate, CustomerProfile, BankProfile
-from datetime import datetime
+from datetime import date, datetime
 import uuid
 
 class UserService:
+    
+    @staticmethod
+    def calculate_age(date_of_birth: date) -> int:
+        """Calculate age from date of birth"""
+        today = date.today()
+        return today.year - date_of_birth.year - ((today.month, today.day) < (date_of_birth.month, date_of_birth.day))
+    
+    @staticmethod
+    def calculate_months_employed(employment_start_date: date) -> int:
+        """Calculate months employed from start date"""
+        today = date.today()
+        return (today.year - employment_start_date.year) * 12 + (today.month - employment_start_date.month)
     
     @staticmethod
     async def create_user(user_data: UserCreate, firebase_uid: str):
@@ -11,34 +23,55 @@ class UserService:
             "user_id": firebase_uid,
             "email": user_data.email,
             "name": user_data.name,
-            "role": user_data.role,
+            "role": "customer",  # Always customer for this flow
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
         }
         
-        if user_data.role == "customer":
-            user_doc.update({
-                "income": user_data.income,
-                "age": user_data.age,
-                "months_employed": user_data.months_employed,
-                "current_credit_score": 650,  # Default starting score
-                "total_debt": 0.0,
-                "current_dti": 0.0,
-                "employment_status": "employed",
-                "loan_history": []
-            })
-        elif user_data.role == "bank":
-            user_doc.update({
-                "bank_name": user_data.bank_name,
-                "max_dti_threshold": 0.45,
-                "total_loans_approved": 0,
-                "total_loans_rejected": 0,
-                "total_loans_under_management": 0
-            })
+        # Since role is always customer, we can directly process customer data
+        # Handle date conversion from string
+        date_of_birth = None
+        employment_start_date = None
+        
+        if user_data.date_of_birth:
+            try:
+                # Parse string date to datetime object
+                if isinstance(user_data.date_of_birth, str):
+                    date_of_birth = datetime.fromisoformat(user_data.date_of_birth)
+                else:
+                    date_of_birth = user_data.date_of_birth
+            except:
+                date_of_birth = None
+        
+        if user_data.employment_start_date:
+            try:
+                if isinstance(user_data.employment_start_date, str):
+                    employment_start_date = datetime.fromisoformat(user_data.employment_start_date)
+                else:
+                    employment_start_date = user_data.employment_start_date
+            except:
+                employment_start_date = None
+        
+        # Calculate age and months employed
+        age = UserService.calculate_age(date_of_birth) if date_of_birth else 0
+        months_employed = UserService.calculate_months_employed(employment_start_date) if employment_start_date else 0
+        
+        user_doc.update({
+            "income": user_data.income,
+            "date_of_birth": date_of_birth.isoformat() if date_of_birth else None,
+            "employment_start_date": employment_start_date.isoformat() if employment_start_date else None,
+            "age": age,
+            "months_employed": months_employed,
+            "current_credit_score": 650,
+            "total_debt": 0.0,
+            "current_dti": 0.0,
+            "employment_status": "employed",
+            "loan_history": []
+        })
         
         users_ref.document(firebase_uid).set(user_doc)
         return user_doc
-    
+
     @staticmethod
     async def update_user_profile(uid: str, update_data: UserUpdate):
         user_ref = users_ref.document(uid)

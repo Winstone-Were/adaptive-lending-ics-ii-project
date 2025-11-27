@@ -3,7 +3,7 @@ from app.middleware.auth_middleware import get_current_customer
 from app.services.user_service import UserService
 from app.services.loan_service import LoanService
 from app.models.user_models import UserUpdate
-from app.models.loan_models import LoanApplication, RepaymentRequest
+from app.models.loan_models import LoanApplication, LoanApplicationWithPackage, RepaymentRequest
 from typing import List
 
 router = APIRouter()
@@ -28,8 +28,21 @@ async def apply_for_loan(
     application: LoanApplication,
     current_user: dict = Depends(get_current_customer)
 ):
+    """Apply for a loan with custom parameters"""
     try:
         result = await LoanService.apply_for_loan(application, current_user['user_id'])
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/loans/apply-package")
+async def apply_for_loan_with_package(
+    application: LoanApplicationWithPackage,
+    current_user: dict = Depends(get_current_customer)
+):
+    """Apply for a loan using a pre-defined package"""
+    try:
+        result = await LoanService.apply_for_loan_with_package(application, current_user['user_id'])
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -37,9 +50,14 @@ async def apply_for_loan(
 @router.get("/loans")
 async def get_my_loans(current_user: dict = Depends(get_current_customer)):
     try:
+        print(f"Current user: {current_user}")  # Debug: see what user data looks like
+        print(f"User ID: {current_user.get('user_id')}")
+        print(f"User role: {current_user.get('role')}")
+        
         loans = await LoanService.get_user_loans(current_user['user_id'])
         return {"loans": loans}
     except Exception as e:
+        print(f"Error in get_my_loans: {str(e)}")  # Better error logging
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.post("/loans/{loan_id}/repay")

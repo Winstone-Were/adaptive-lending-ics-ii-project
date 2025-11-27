@@ -6,18 +6,26 @@ class ScoringService:
     @staticmethod
     def calculate_credit_score(default_probability: float, current_score: float = None) -> float:
         """
-        Calculate dynamic credit score based on default probability and payment history
+        Calculate FICO-like credit score from default probability using log-odds.
         """
+        # Default score if none is provided
         if current_score is None:
-            current_score = 650  # Default starting score
-        
-        # Base adjustment from default probability
-        probability_penalty = default_probability * 100
-        
-        # Calculate new score
-        new_score = current_score - probability_penalty
-        
-        # Ensure score stays within bounds
+            current_score = 650
+
+        # Clip PD to avoid infinities
+        pd = min(max(default_probability, 1e-6), 1 - 1e-6)
+
+        # FICO-style parameters
+        A = 600   # score center
+        B = 50    # score range multiplier
+
+        # Log-odds transform
+        log_odds = math.log(pd / (1 - pd))
+
+        # Compute new score
+        new_score = A - B * log_odds
+
+        # Keep within valid range
         return max(300, min(850, new_score))
     
     @staticmethod

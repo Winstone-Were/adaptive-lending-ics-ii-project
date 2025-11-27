@@ -1,6 +1,4 @@
-import pickle
 import numpy as np
-import pandas as pd
 from tensorflow import keras
 from app.config import settings
 import os
@@ -16,32 +14,26 @@ def load_model():
         try:
             model_path = settings.MODEL_PATH
             model = keras.models.load_model(model_path)
-            print("Model loaded successfully")
         except Exception as e:
-            print(f"Error loading model: {e}")
             # Create a dummy model for development
             model = create_dummy_model()
     return model
 
 def load_scaler():
-    """Load the scaler from file"""
+    """Load the scaler from file using joblib"""
     global scaler
     if scaler is None:
         try:
             scaler_path = settings.SCALER_PATH
-            with open(scaler_path, 'rb') as f:
-                scaler = pickle.load(f)
-            print("Scaler loaded successfully")
+            import joblib
+            scaler = joblib.load(scaler_path)
         except Exception as e:
-            print(f"Error loading scaler: {e}")
             # Create a dummy scaler for development
             scaler = create_dummy_scaler()
     return scaler
 
 def create_dummy_model():
     """Create a dummy model for development when real model is not available"""
-    print("Creating dummy model for development...")
-    # Create a simple sequential model
     model = keras.Sequential([
         keras.layers.Dense(64, activation='relu', input_shape=(7,)),
         keras.layers.Dropout(0.3),
@@ -54,14 +46,12 @@ def create_dummy_model():
 
 def create_dummy_scaler():
     """Create a dummy scaler for development"""
-    print("Creating dummy scaler for development...")
     from sklearn.preprocessing import StandardScaler
     scaler = StandardScaler()
-    # Fit with some dummy data that matches our feature ranges
     dummy_data = np.array([
-        [50000, 5.0, 25000, 35, 650, 24, 0.3],   # Typical values
-        [80000, 3.5, 50000, 45, 750, 60, 0.2],   # Good applicant
-        [30000, 10.0, 10000, 25, 550, 6, 0.5],   # Risky applicant
+        [50000, 5.0, 25000, 35, 650, 24, 0.3],
+        [80000, 3.5, 50000, 45, 750, 60, 0.2],
+        [30000, 10.0, 10000, 25, 550, 6, 0.5],
     ])
     scaler.fit(dummy_data)
     return scaler
@@ -69,13 +59,6 @@ def create_dummy_scaler():
 def preprocess_input(input_data: dict, selected_features: list) -> np.ndarray:
     """
     Preprocess input data for model prediction
-    
-    Args:
-        input_data: Dictionary containing the input features
-        selected_features: List of feature names in the expected order
-    
-    Returns:
-        Preprocessed numpy array ready for model prediction
     """
     # Load model and scaler if not already loaded
     model = load_model()
@@ -98,7 +81,6 @@ def preprocess_input(input_data: dict, selected_features: list) -> np.ndarray:
                 "DTIRatio": 0.3
             }
             feature_values.append(default_values.get(feature, 0))
-            print(f"Warning: Missing feature {feature}, using default value: {default_values.get(feature, 0)}")
     
     # Convert to numpy array and reshape for single sample
     input_array = np.array(feature_values).reshape(1, -1)
@@ -111,12 +93,6 @@ def preprocess_input(input_data: dict, selected_features: list) -> np.ndarray:
 def predict_default_probability(input_data: dict) -> float:
     """
     Predict default probability for given input data
-    
-    Args:
-        input_data: Dictionary containing all required features
-    
-    Returns:
-        Default probability between 0 and 1
     """
     SELECTED_FEATURES = [
         "Income",

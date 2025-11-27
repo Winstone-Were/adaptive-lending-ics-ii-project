@@ -37,6 +37,7 @@ async def register_user(
         return {"message": "User registered successfully", "user": user}
     
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/me")

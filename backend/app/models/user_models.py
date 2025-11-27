@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List, Dict
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 class UserRole(str, Enum):
@@ -39,15 +39,15 @@ class UserCreate(BaseModel):
     email: EmailStr
     role: UserRole
     income: Optional[float] = None
-    age: Optional[int] = None
-    months_employed: Optional[int] = None
+    date_of_birth: Optional[date] = None
+    employment_start_date: Optional[date] = None
     bank_name: Optional[str] = None
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     income: Optional[float] = None
-    age: Optional[int] = None
-    months_employed: Optional[int] = None
+    date_of_birth: Optional[date] = None
+    employment_start_date: Optional[date] = None
     current_employment: Optional[str] = None
     address: Optional[str] = None
 
@@ -69,3 +69,17 @@ class BankProfile(BaseModel):
     total_loans_approved: int = 0
     total_loans_rejected: int = 0
     total_loans_under_management: int = 0
+
+class LoanPackageCreate(BaseModel):
+    name: str
+    amount: float = Field(gt=0)
+    interest_rate: float = Field(gt=0, le=50)
+    loan_term_months: int = Field(gt=0)
+    minimum_credit_score: float = Field(ge=300, le=850)
+    description: Optional[str] = None
+
+class LoanPackage(LoanPackageCreate):
+    package_id: str
+    bank_id: str
+    created_at: datetime
+    is_active: bool = True
