@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     
     # Firebase
-    FIREBASE_CREDENTIALS_PATH: str = "app/adaptive-lending-firebase-adminsdk-fbsvc-eb8134342f.json"
+    FIREBASE_CREDENTIALS_PATH: str = "app/adaptive-lending-firebase-adminsdk-fbsvc-3514e2cff2.json"
     
     # CORS
     BACKEND_CORS_ORIGINS: List[str] = ["*"]

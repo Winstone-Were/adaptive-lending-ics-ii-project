@@ -7,3 +7,5 @@ scikit-learn
 joblib
 python-multipart
 firebase-admin
+GPUtil
+email-validator
